@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <title>Moorkarte Berlin</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-measure/dist/leaflet-measure.css" />
+
+    <style>
+        html, body { width: 100%; height: 100%; padding: 0; margin: 0; }
+        #mapid { width: 100%; height: 100%; }
+        
+        .popup-content table { border-collapse: collapse; width: 100%; }
+        .popup-content td { border-bottom: 1px solid #ddd; padding: 4px; font-size: 13px; }
+        .popup-content tr:last-child td { border-bottom: none; }
+
+        .author-box {
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #555;
+            line-height: 1.4;
+        }
+        .author-box a {
+            color: #0078A8;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .author-box a:hover {
+            text-decoration: underline;
+        }
+        
+        .leaflet-control-measure-toggle, .leaflet-control-measure-toggle:hover {
+            background-color: #fff;
+            color: #333;
+        }
+    </style>    
+</head>
+<body>
+
+    <div id="mapid"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-measure/dist/leaflet-measure.js"></script>
+
+    <script>
+        var esri_imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri',
+            maxZoom: 19
+        });
+
+        var osm_de = L.tileLayer('https://{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        });
+
+        var open_topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: 'Kartendaten: &copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende',
+            maxZoom: 17
+        });
+
+        var mymap = L.map('mapid', {
+            center: [52.51, 13.40],
+            zoom: 11,
+            layers: [esri_imagery] 
+        });
+
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters', 
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters', 
+            secondaryAreaUnit: 'hectares',
+            activeColor: '#FF0000', 
+            completedColor: '#8B0000', 
+            decPoint: ',', 
+            thousandsSep: '.'
+        });
+        measureControl.addTo(mymap);
+
+        var baseMaps = {
+            "Satellitenbild": esri_imagery,
+            "OpenStreetMap DE": osm_de,
+            "Topographisch": open_topo
+        };
+
+        fetch('moore.json')
+            .then(response => {
+                if (!response.ok) throw new Error("Fehler beim Laden der Datei");
+                return response.json();
+            })
+            .then(data => {
+                var moorLayer = L.geoJSON(data, {
+                    attribution: '| Daten: <a href="https://daten.berlin.de/datensaetze/moore-umweltatlas-wfs-45d7abff" target="_blank">Umweltatlas Berlin / WFS</a>',
+                    style: function(feature) {
+                        return {
+                            color: '#b3ff00',
+                            weight: 2,
+                            fillColor: '#2d5a27',
+                            fillOpacity: 0.6
+                        };
+                    },
+                    onEachFeature: function (feature, layer) {
+                        var popupHTML = '<div class="popup-content"><h3>Moor Details</h3><table>';
+                        for (var key in feature.properties) {
+                            if (feature.properties[key]) {
+                                popupHTML += '<tr><td><strong>' + key + ':</strong></td><td>' + feature.properties[key] + '</td></tr>';
+                            }
+                        }
+                        popupHTML += '</table></div>';
+                        layer.bindPopup(popupHTML);
+                    }
+                });
+
+                moorLayer.addTo(mymap);
+                mymap.fitBounds(moorLayer.getBounds());
+
+                var overlayMaps = {
+                    "Berliner Moore": moorLayer
+                };
+
+                L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(mymap);
+            })
+            .catch(error => {
+                console.error("Fehler:", error);
+                L.control.layers(baseMaps).addTo(mymap); 
+            });
+
+        var authorControl = L.control({ position: 'bottomleft' });
+
+        authorControl.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'author-box');
+            div.innerHTML = 'Autor: <br> <a href="https://deine-website.de" target="_blank">Till Albrecht</a>';
+            return div;
+        };
+
+        authorControl.addTo(mymap);
+
+        L.control.scale({ imperial: false }).addTo(mymap);
+
+    </script>
+</body>
+</html>
